@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+import rospy
+from sensor_msgs.msg import JointState
+
+from markers import *
+from funciones import *
+
+# Creacion del nodo para publicar los valores articulares al robot RViz y hacer que se mueva
+rospy.init_node("testForwardKinematics")
+pub = rospy.Publisher('joint_states', JointState, queue_size=1)
+
+# Creacion del marcador verde que se posiciona en el efector final a partir del calculo de cinematica directa
+bmarker = BallMarker(color['GREEN'])
+
+# Nombres de las articulaciones del robot movil
+# Se incluyen las articulaciones de las ruedas, ya que se les debe pasar algun valor para que se posicionen en sus ejes respectivos
+jnames = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q01', 'q02', 'q03', 'q04']
+# Valores articulares (VALORES MODIFICABLES)
+q = [1, 2.2, 0.1, 0.8, 0.2, 0.2, 0, 0, 0, 0, 0]
+
+# Calculo de la posicion y orientacion del efector final con respecto al origen
+T = fkine(q[0:7])       # Se utiliza la funcion fkine creada y se le pasan los valores articulares del robot manipulador para hallar la matriz de transformacion homogenea del efector final con respecto al origen
+# Se imprime la matriz de transformacion homogenea para conocer la posicion y orientacion del efector final
+print(np.round(T, 3))
+bmarker.position(T)     # Se utiliza la funcion position del marcador para ubicar el marcador en el componente de posicion contenido en la matriz T, que describe la posicion y orientacion del efector final con respecto a la base, obtenidas por medio del calculo de cinematica directa
+
+# Se crea el mensaje de tipo JointState
+jstate = JointState()
+# Se proporcionan los valores necesarios del mensaje
+jstate.header.stamp = rospy.Time.now()
+jstate.name = jnames    # Se pasan los nombres de las articulaciones al mensaje
+jstate.position = q     # Se pasan los valores articulares al mensaje
+
+# Frecuencia de ejecucion del bucle (Hz)
+rate = rospy.Rate(20)
+
+# Bucle de ejecucion
+while not rospy.is_shutdown():
+    # Tiempo actual (Requerido para ROS)
+    jstate.header.stamp = rospy.Time.now()
+    # Publicacion del mensaje
+    pub.publish(jstate)  # Se publican los valores articulares al robot en RViz para modificar el valores de las articulaciones y posicionar el robot en la configuracion acorde a estos valores
+    bmarker.publish()   # Se publica el marcador, que muestra la ubicacion del efector final de acuerdo al calculo de cinematica directa por Denavit-Hartenbeg
+    '''
+    Para comprobar que el calculo de cinematica directa a partir de valores articulares es correcto, el marcador, cuya 
+    posicion fue calculada, se debe ubicar en el efector final del robot, cuya posicion se define por el modelo del robot al 
+    recibir valores articulares.
+    '''
+    # Espera a la siguiente iteracion siguiendo la frecuencia de ejecucion
+    rate.sleep()

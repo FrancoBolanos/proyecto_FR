@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+
+import rospy
+from sensor_msgs.msg import JointState
+from markers import *
+from funciones import *
+
+# Creacion del nodo para publicar los valores articulares al robot RViz y hacer que se mueva
+rospy.init_node("testInvKine")
+pub = rospy.Publisher('joint_states', JointState, queue_size=1000)
+
+# Creacion del marcador rojo que se posiciona en la posicion del efector final, hallada mediante cinematica directa
+bmarker = BallMarker(color['RED'])
+# Creacion del marcador verde que se posiciona en la posicion deseada ingresada
+bmarker_des = BallMarker(color['GREEN'])
+
+# Nombres de las articulaciones del robot movil
+# Se incluyen las articulaciones de las ruedas, ya que se les debe pasar algun valor para que se posicionen en sus ejes respectivos
+jnames = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q01', 'q02', 'q03', 'q04']
+# Posicion deseada en la que se ubica el marcador verde y a la que debe llegar el efector final (VALORES MODIFICABLES)
+xd = np.array([-0.7, -1.3, 0.7])
+# Configuracion inicial (q de partida para el proceso iterativo)
+q0 = np.array([0, 1.9, 0, 2.9, 0.13, 2.6, 0, 0, 0, 0, 0])
+# Cinematica inversa por metodo de la gradiente
+# Se otienen los valores articulares para el robot manipulador
+q = ik_gradient(xd, q0[0:7])
+# Se agregan los valores articulares del robot movil para el robot
+qc = np.concatenate((q, np.array([0, 0, 0, 0])), axis=None)
+
+# Se halla la matriz de tranasformacion homogenea a partir de los valores articulares hallados mediante cinematica inversa para comprobar si se llego a la posicion deseada a partir del componente de posicion
+T = fkine(q)
+print('q: ')
+# Se halla el modulo de los valores articulares, ya que las articulaciones rotacionales podrian dar mas de una vuelta. Este calculo es valido debido a que si una articulacion rotacional da una vuelta completa seria lo mismo que no dar ninguna
+print(np.round((np.abs(q) % (2*pi))*np.sign(q), 3))
+# Se imprime la posicion del efector final hallada mediante cinematica directa a partir de los valores articulares obtenidos
+print('Obtained value: ')
+print(np.round(T, 3))
+
+# Red marker shows the achieved position
+bmarker.xyz(T[0:3, 3])
+# Green marker shows the desired position
+bmarker_des.xyz(xd)
+
+# Objeto (mensaje) de tipo JointState
+jstate = JointState()
+# Asignar valores al mensaje
+jstate.header.stamp = rospy.Time.now()
+jstate.name = jnames
+# Add the head joint value (with value 0) to the joints
+jstate.position = qc
+
+# Loop rate (in Hz)
+rate = rospy.Rate(100)
+# Continuous execution loop
+while not rospy.is_shutdown():
+    # Current time (needed for ROS)
+    jstate.header.stamp = rospy.Time.now()
+    # Publish the message
+    pub.publish(jstate)
+    bmarker.publish()
+    bmarker_des.publish()
+    # Wait for the next iteration
+    rate.sleep()

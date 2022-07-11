@@ -1,0 +1,8 @@
+prefix=/home/user/lab_ws/install
+
+Name: camara_movil_description
+Description: Description of camara_movil_description
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

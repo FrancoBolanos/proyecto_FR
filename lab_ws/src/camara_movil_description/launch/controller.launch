@@ -1,0 +1,9 @@
+<launch>
+
+<rosparam file="$(find camara_movil_description)/launch/controller.yaml" command="load"/>
+<node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" ns="camara_movil" args="q01_position_controller q03_position_controller q02_position_controller q04_position_controller q1_position_controller q2_position_controller q3_position_controller q5_position_controller q4_position_controller q7_position_controller q6_position_controller joint_state_controller "/>
+<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
+  <remap from="/joint_states" to="/camara_movil/joint_states"/>
+</node>
+
+</launch>

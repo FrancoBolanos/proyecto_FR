@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+ 
+import rospy
+from sensor_msgs.msg import JointState
+ 
+from markers import *
+from funciones import *
+ 
+rospy.init_node("testForwardKinematics")
+pub = rospy.Publisher('joint_states', JointState, queue_size=1)
+# Files for the logs
+fxcurrent = open("/tmp/xcurrent.txt", "w")                
+fxdesired = open("/tmp/xdesired.txt", "w")
+fq = open("/tmp/q.txt", "w")
+ 
+# Joint names
+jnames = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6',
+          'q7', 'q01', 'q02', 'q03', 'q04']
+# Joint Configuration
+q= np.array([0, 1.9, 0, 2.9, 0.13, 2.6, 0, 0, 0, 0, 0])
+ 
+ 
+# Markers for the current and desired positions
+bmarker_current  = BallMarker(color['RED'])
+bmarker_desired = BallMarker(color['GREEN'])
+ 
+# Desired position
+xd = np.array([0.6, 0.6, 1.2])
+# End effector with respect to the base
+T = fkine(q[0:7])
+print(np.round(T, 3))
+x=T[0:3,3]
+# Red marker shows the achieved position
+bmarker_current.xyz(x)
+# Green marker shows the desired position
+bmarker_desired.xyz(xd)
+ 
+ 
+# Object (message) whose type is JointState
+jstate = JointState()
+# Set values to the message
+jstate.header.stamp = rospy.Time.now()
+jstate.name = jnames
+# Add the head joint value (with value 0) to the joints
+jstate.position = q
+freq = 200
+dt = 1.0/freq
+qc=q[0:7]
+# Loop rate (in Hz)
+rate = rospy.Rate(freq)
+# Continuous execution loop
+while not rospy.is_shutdown():
+    # Current time (needed for ROS)
+    jstate.header.stamp = rospy.Time.now()
+    # Kinematic control law for position (complete here)
+    # -----------------------------
+    # Estableciendo el factor de control
+    k=0.5
+    # Obtenemos la matriz de transformacion de DH 
+    T = fkine(qc)
+    # Consideramos solamente la posicion 
+    x = T[0:3,3]
+    # Procedemos a hallar el jacobiano analitico de la posicion para el q actual
+    J = jacobian_position(qc, delta=0.0001)
+    # Aplicamos la pseudoinversa al jacobiano
+    invJ = np.linalg.pinv(J)
+    # Encontramos el error
+    e = x - xd
+    # Derivamos el error
+    de = -k*e
+    # Aplicamos la ley de control y despejamos dq
+    dq = invJ.dot(de)
+    # Integramos por euler y actualizamos la configuracion articular
+    qc = qc + dt*dq
+    # restricciones para el manipulador, en especifico para las articulaciones prismaticas
+    if qc[2] >= 0.25:
+            qc[2] = 0.25
+    if qc[2] <= 0:
+        qc[2] = 0
+    if qc[4] >= 0.25:
+        qc[4] = 0.25
+    if qc[4] <= 0:
+        qc[4] = 0
+        
+    # almacenamos la data de posicion                                                    
+    fxcurrent.write(str(x[0])+' '+str(x[1]) +' '+str(x[2])+'\n')
+    fxdesired.write(str(xd[0])+' '+str(xd[1])+' '+str(xd[2])+'\n')
+    fq.write(str(q[0])+" "+str(q[1])+" "+str(q[2])+" "+str(q[3])+" "+
+             str(q[4])+" "+str(q[5])+"\n")
+ 
+    q2=np.concatenate((qc, np.array([0, 0, 0, 0])), axis=None)
+    # Publish the message
+    jstate.position = q2
+    pub.publish(jstate)
+ 
+    # Publish the message
+    pub.publish(jstate)
+    bmarker_desired.xyz(xd)
+    bmarker_current.xyz(x)
+ 
+    # Wait for the next iteration
+    rate.sleep()
